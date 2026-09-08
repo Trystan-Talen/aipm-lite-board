@@ -227,7 +227,7 @@ todoForm.addEventListener("submit", async (e) => {
   }
 });
 
-initI18n()
+initI18n({ locale: localStorage.getItem("scrumboy.locale") || "zh" })
   .catch((err) => {
     console.warn("i18n initialization failed; continuing with English fallbacks.", err);
   })
