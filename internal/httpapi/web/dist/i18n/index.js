@@ -633,7 +633,7 @@ export function detectLocale(options = {}) {
         if (locale)
             return locale;
     }
-    return "en";
+    return "zh";
 }
 function getAppVersion() {
     const meta = globalThis.document?.querySelector?.('meta[name="app-version"]');

@@ -21,13 +21,17 @@ func TestCreateProject_SeedsDefaultPriorities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetProjectPriorities: %v", err)
 	}
-	want := []string{"low", "medium", "high", "urgent"}
-	if len(tiers) != len(want) {
-		t.Fatalf("expected %d default tiers, got %d", len(want), len(tiers))
+	wantKeys := []string{"low", "medium", "high", "urgent"}
+	wantNames := []string{"P3｜想法与优化", "P2｜正常排期", "P1｜当前迭代必须完成", "P0｜立即处理"}
+	if len(tiers) != len(wantKeys) {
+		t.Fatalf("expected %d default tiers, got %d", len(wantKeys), len(tiers))
 	}
 	for i, tier := range tiers {
-		if tier.Key != want[i] {
-			t.Fatalf("tier %d: want key %q, got %q", i, want[i], tier.Key)
+		if tier.Key != wantKeys[i] {
+			t.Fatalf("tier %d: want key %q, got %q", i, wantKeys[i], tier.Key)
+		}
+		if tier.Name != wantNames[i] {
+			t.Fatalf("tier %d: want name %q, got %q", i, wantNames[i], tier.Name)
 		}
 		if tier.Position != i {
 			t.Fatalf("tier %q: want position %d, got %d", tier.Key, i, tier.Position)
@@ -238,13 +242,17 @@ func TestDeletePriorityTier_ResequencesPositions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetProjectPriorities: %v", err)
 	}
-	want := []string{"low", "high", "urgent"}
-	if len(tiers) != len(want) {
-		t.Fatalf("expected %d tiers after delete, got %d", len(want), len(tiers))
+	wantKeys := []string{"low", "high", "urgent"}
+	wantNames := []string{"P3｜想法与优化", "P1｜当前迭代必须完成", "P0｜立即处理"}
+	if len(tiers) != len(wantKeys) {
+		t.Fatalf("expected %d tiers after delete, got %d", len(wantKeys), len(tiers))
 	}
 	for i, tier := range tiers {
-		if tier.Key != want[i] {
-			t.Fatalf("tier %d: want key %q, got %q", i, want[i], tier.Key)
+		if tier.Key != wantKeys[i] {
+			t.Fatalf("tier %d: want key %q, got %q", i, wantKeys[i], tier.Key)
+		}
+		if tier.Name != wantNames[i] {
+			t.Fatalf("tier %d: want name %q, got %q", i, wantNames[i], tier.Name)
 		}
 		if tier.Position != i {
 			t.Fatalf("tier %q: want resequenced position %d, got %d", tier.Key, i, tier.Position)

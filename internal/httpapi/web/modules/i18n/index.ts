@@ -661,7 +661,7 @@ export function detectLocale(options: DetectLocaleOptions = {}): LocaleId {
     const locale = normalizeLocale(language);
     if (locale) return locale;
   }
-  return "en";
+  return "zh";
 }
 
 function getAppVersion(): string {

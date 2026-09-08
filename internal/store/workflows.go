@@ -115,11 +115,11 @@ func uniqueWorkflowKey(baseKey string, used map[string]struct{}) (string, error)
 
 func defaultWorkflowColumns() []WorkflowColumn {
 	return []WorkflowColumn{
-		{Key: DefaultColumnBacklog, Name: "Backlog", Color: "#9CA3AF", Position: 0, IsDone: false, System: true},
-		{Key: DefaultColumnNotStarted, Name: "Not Started", Color: "#F59E0B", Position: 1, IsDone: false, System: true},
-		{Key: DefaultColumnDoing, Name: "In Progress", Color: "#10B981", Position: 2, IsDone: false, System: true},
-		{Key: DefaultColumnTesting, Name: "Testing", Color: "#3B82F6", Position: 3, IsDone: false, System: true},
-		{Key: DefaultColumnDone, Name: "Done", Color: "#EF4444", Position: 4, IsDone: true, System: true},
+		{Key: DefaultColumnBacklog, Name: "需求池", Color: "#9CA3AF", Position: 0, IsDone: false, System: true},
+		{Key: DefaultColumnNotStarted, Name: "待澄清", Color: "#F59E0B", Position: 1, IsDone: false, System: true},
+		{Key: DefaultColumnDoing, Name: "开发中", Color: "#10B981", Position: 2, IsDone: false, System: true},
+		{Key: DefaultColumnTesting, Name: "联调测试", Color: "#3B82F6", Position: 3, IsDone: false, System: true},
+		{Key: DefaultColumnDone, Name: "已完成", Color: "#EF4444", Position: 4, IsDone: true, System: true},
 	}
 }
 

@@ -35,11 +35,11 @@ const PREFETCH_DELAY_MS = 250;
 let projectsI18nBound = false;
 
 const DEFAULT_WORKFLOW_LANES: WorkflowLaneDraft[] = [
-  { key: "backlog", name: "Backlog", color: "#9CA3AF", position: 0, isDone: false },
-  { key: "not_started", name: "Not Started", color: "#F59E0B", position: 1, isDone: false },
-  { key: "doing", name: "In Progress", color: "#10B981", position: 2, isDone: false },
-  { key: "testing", name: "Testing", color: "#3B82F6", position: 3, isDone: false },
-  { key: "done", name: "Done", color: "#EF4444", position: 4, isDone: true },
+  { key: "backlog", name: "需求池", color: "#9CA3AF", position: 0, isDone: false },
+  { key: "not_started", name: "待澄清", color: "#F59E0B", position: 1, isDone: false },
+  { key: "doing", name: "开发中", color: "#10B981", position: 2, isDone: false },
+  { key: "testing", name: "联调测试", color: "#3B82F6", position: 3, isDone: false },
+  { key: "done", name: "已完成", color: "#EF4444", position: 4, isDone: true },
 ];
 
 let workflowLanes: WorkflowLaneDraft[] = DEFAULT_WORKFLOW_LANES.map((l) => ({ ...l }));

@@ -352,6 +352,7 @@ export function bindCalendarTabInteractions(options: BindCalendarTabOptions): vo
   timezoneSelect?.addEventListener(
     'change',
     async () => {
+      const previous = resolveAgendaTimezone(cachedCalendar?.agendaTimezone);
       const timezone = resolveAgendaTimezone(timezoneSelect.value);
       try {
         await apiFetch(`/api/board/${slug}/settings`, {
@@ -362,8 +363,11 @@ export function bindCalendarTabInteractions(options: BindCalendarTabOptions): vo
         clearCalendarSettingsCache();
         await rerender();
       } catch (err: unknown) {
+        timezoneSelect.value = previous;
         showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.calendar.toast.timezoneFailed' }));
         await rerender();
+        const restoredSelect = document.getElementById('agendaTimezoneInput') as HTMLSelectElement | null;
+        if (restoredSelect) restoredSelect.value = previous;
       }
     },
     { signal },

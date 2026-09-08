@@ -155,8 +155,8 @@ func TestMoveTodo_ToTesting(t *testing.T) {
 		if moved.ColumnKey != DefaultColumnDone {
 			t.Errorf("expected column Done, got %q", moved.ColumnKey)
 		}
-		if moved.MoveFromColumnName != "Testing" || moved.MoveToColumnName != "Done" {
-			t.Errorf("move transition names = %q → %q, want Testing → Done", moved.MoveFromColumnName, moved.MoveToColumnName)
+		if moved.MoveFromColumnName != "联调测试" || moved.MoveToColumnName != "已完成" {
+			t.Errorf("move transition names = %q → %q, want 联调测试 → 已完成", moved.MoveFromColumnName, moved.MoveToColumnName)
 		}
 	})
 }

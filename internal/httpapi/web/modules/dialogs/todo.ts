@@ -25,7 +25,7 @@ import { getBoard, getBoardMembers, getMarkdownNotesEnabled, getMermaidNotesEnab
 import { setAvailableTags, setAvailableTagsMap, setEditingTodo, setTagColors } from '../state/mutations.js';
 import { escapeHTML, isAnonymousBoard, showConfirmDialog, showToast } from '../utils.js';
 import { applyFieldTooltips, TODO_DIALOG_TOOLTIPS } from '../field-tooltips.js';
-import { apiErrorMessage, formatDate as formatLocalizedDate, hasI18nKey, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
+import { apiErrorMessage, formatDate as formatLocalizedDate, getLocale, hasI18nKey, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
 import { boardSprintsEnabled, normalizeSprints } from '../sprints.js';
 import {
   bindShareTodoButton,
@@ -77,6 +77,26 @@ let todoTooltipsApplied = false;
 let todoDialogBaseline: TodoDialogSnapshot | null = null;
 let todoDialogClosePromptOpen = false;
 let todoCreatorLocaleAbort: AbortController | null = null;
+
+const DEFAULT_AIPM_REQUIREMENT_TEMPLATE = `## 背景
+
+## 用户问题
+
+## 目标
+
+## 非目标
+
+## 验收标准
+- [ ]
+
+## 数据指标
+
+## 风险与依赖
+`;
+
+function defaultAIPMRequirementTemplate(): string {
+  return getLocale() === "zh" ? DEFAULT_AIPM_REQUIREMENT_TEMPLATE : "";
+}
 
 function sprintStateLabel(state: string): string {
   const key = `todo.sprint.state.${state}`;
@@ -626,7 +646,7 @@ export async function openTodoDialog(opts: {
   if (mode === "create") {
     setTodoDialogTitleKey("todo.dialog.title.new");
     (todoTitle as HTMLInputElement).value = normalizeSeedTitle(opts.initialTitle);
-    (todoBody as HTMLTextAreaElement).value = "";
+    (todoBody as HTMLTextAreaElement).value = defaultAIPMRequirementTemplate();
     (todoTags as HTMLInputElement).value = "";
     const initialKey = resolveColumnKey(status);
     const selected = populateTodoStatusOptions(initialKey);

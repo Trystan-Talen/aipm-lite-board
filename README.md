@@ -9,6 +9,8 @@
   <a href="https://scorecard.dev/viewer/?uri=github.com/markrai/scrumboy"><img src="https://api.scorecard.dev/projects/github.com/markrai/scrumboy/badge" alt="OpenSSF Scorecard" /></a>
 </p>
 
+> 中文小团队 AIPM（AI 产品经理）版本请先阅读：[README.zh-CN.md](README.zh-CN.md)
+
 #### Self-hosted project management & issue-tracking solution + instant shareable & customizable boards + realtime collaboration, automation, API access and MCP-compatible client support
 
 <img width="2975" height="1078" alt="image" src="internal/httpapi/web/github_preview.jpg" />

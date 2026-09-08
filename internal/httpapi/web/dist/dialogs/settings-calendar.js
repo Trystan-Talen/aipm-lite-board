@@ -287,6 +287,7 @@ export function bindCalendarTabInteractions(options) {
     }, { signal });
     const timezoneSelect = document.getElementById('agendaTimezoneInput');
     timezoneSelect?.addEventListener('change', async () => {
+        const previous = resolveAgendaTimezone(cachedCalendar?.agendaTimezone);
         const timezone = resolveAgendaTimezone(timezoneSelect.value);
         try {
             await apiFetch(`/api/board/${slug}/settings`, {
@@ -298,8 +299,12 @@ export function bindCalendarTabInteractions(options) {
             await rerender();
         }
         catch (err) {
+            timezoneSelect.value = previous;
             showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.calendar.toast.timezoneFailed' }));
             await rerender();
+            const restoredSelect = document.getElementById('agendaTimezoneInput');
+            if (restoredSelect)
+                restoredSelect.value = previous;
         }
     }, { signal });
     const addBtn = document.getElementById('calendarSourceAdd');

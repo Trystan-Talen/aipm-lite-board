@@ -344,7 +344,7 @@ describe("projects i18n shell", () => {
     }
   });
 
-  it("keeps default workflow lane names in English under a non-English locale", async () => {
+  it("uses the Chinese AIPM workflow defaults under a non-Chinese locale", async () => {
     apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === "/api/projects" && !init) {
         return [];
@@ -365,11 +365,11 @@ describe("projects i18n shell", () => {
 
       expect(document.querySelector("dialog .dialog__title")?.textContent).toBe("Workflow anpassen");
       expect(Array.from(document.querySelectorAll<HTMLInputElement>("[data-lane-name]")).map((el) => el.value)).toEqual([
-        "Backlog",
-        "Not Started",
-        "In Progress",
-        "Testing",
-        "Done",
+        "需求池",
+        "待澄清",
+        "开发中",
+        "联调测试",
+        "已完成",
       ]);
     } finally {
       cleanup();

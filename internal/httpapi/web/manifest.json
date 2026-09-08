@@ -1,7 +1,7 @@
 {
-  "name": "Scrumboy",
-  "short_name": "Scrumboy",
-  "description": "Pastebin-style Kanban boards for quick collaboration. Create & share with zero sign-up.",
+  "name": "AIPM 轻量产研看板",
+  "short_name": "AIPM 看板",
+  "description": "面向中文小团队的轻量需求池、优先级、拆分、排期与研发进度看板。",
   "start_url": "/",
   "display": "fullscreen",
   "background_color": "#000000",
