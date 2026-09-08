@@ -20,6 +20,7 @@ func TestGenerateSlugFromName(t *testing.T) {
 		{name: "   ", wantErr: true},
 		// Non-ascii letters are removed; should still produce a valid slug if possible.
 		{name: "Café", want: "caf"},
+		{name: "中文项目", want: "project-006a68198644"},
 	}
 
 	for _, tc := range cases {
@@ -42,6 +43,28 @@ func TestGenerateSlugFromName(t *testing.T) {
 				t.Fatalf("generated slug is not valid: %q", got)
 			}
 		})
+	}
+}
+
+func TestCreateProject_ChineseNameUsesStableFallbackSlug(t *testing.T) {
+	st, cleanup := newTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	p1, err := st.CreateProject(ctx, "需求排期")
+	if err != nil {
+		t.Fatalf("CreateProject #1: %v", err)
+	}
+	p2, err := st.CreateProject(ctx, "需求排期")
+	if err != nil {
+		t.Fatalf("CreateProject #2: %v", err)
+	}
+
+	if p1.Slug != "project-5280841bf8e2" {
+		t.Fatalf("p1 slug got %q want %q", p1.Slug, "project-5280841bf8e2")
+	}
+	if p2.Slug != "project-5280841bf8e2-2" {
+		t.Fatalf("p2 slug got %q want %q", p2.Slug, "project-5280841bf8e2-2")
 	}
 }
 

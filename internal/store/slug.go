@@ -2,6 +2,7 @@ package store
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"regexp"
 	"strings"
@@ -32,6 +33,14 @@ func generateSlugFromName(name string) (string, error) {
 	if name == "" {
 		return "", fmt.Errorf("name cannot be empty")
 	}
+	originalName := name
+	hasUnicodeAlphanumeric := false
+	for _, r := range originalName {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			hasUnicodeAlphanumeric = true
+			break
+		}
+	}
 	name = strings.ToLower(name)
 	name = strings.ReplaceAll(name, " ", "-")
 	name = strings.ReplaceAll(name, "_", "-")
@@ -50,7 +59,11 @@ func generateSlugFromName(name string) (string, error) {
 	name = re.ReplaceAllString(name, "-")
 	name = strings.Trim(name, "-")
 	if len(name) == 0 {
-		return "", fmt.Errorf("name cannot produce a valid slug")
+		if !hasUnicodeAlphanumeric {
+			return "", fmt.Errorf("name cannot produce a valid slug")
+		}
+		sum := sha256.Sum256([]byte(originalName))
+		return fmt.Sprintf("project-%x", sum[:6]), nil
 	}
 	if len(name) > maxSlugLen {
 		name = name[:maxSlugLen]
