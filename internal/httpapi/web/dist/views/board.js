@@ -19,7 +19,7 @@ import { registerBoardRefresher, registerSprintsRefresher, getBoardLimitPerLaneF
 import { boardSprintsEnabled, normalizeSprints } from '../sprints.js';
 import { on, off } from '../events.js';
 import { recordLocalMutation, } from '../realtime/guard.js';
-import { buildBoardColumnsHtml, buildFiltersHtml, buildNoResultsHtml, buildTopbarHtml, buildPriorityTierMap, getBoardColumns, visibleBoardLaneCount, renderVoiceCommandTriggerHtml, renderTodoCard, } from './board-rendering.js';
+import { buildBoardColumnsHtml, buildWorkflowGuideHtml, buildFiltersHtml, buildNoResultsHtml, buildTopbarHtml, buildPriorityTierMap, getBoardColumns, visibleBoardLaneCount, renderVoiceCommandTriggerHtml, renderTodoCard, } from './board-rendering.js';
 import { AGENDA_COLUMN_KEY, agendaEvents, agendaLaneColor, agendaLaneTitle, agendaMobileTabAriaLabel, agendaMobileTabInnerHtml, applyAgendaScrollAfterRender, buildAgendaColumnHtml, captureAgendaListScroll, flushAgendaInitialScroll, isAgendaEnabled } from './board-agenda.js';
 import { clearTodoMultiSelection, ensureBulkEditUi, getSelectedTodoIds, toggleTodoSelection, } from './board-selection.js';
 import { bootstrapLoadedBoardView } from './board-load-bootstrap.js';
@@ -326,6 +326,36 @@ function scheduleCardHighlight(todo) {
         }, 2000);
     });
 }
+async function moveTodoFromBoardControl(card, toColumnKey, control) {
+    const slug = getSlug();
+    const localId = Number(card.getAttribute("data-todo-local-id"));
+    const board = getBoard();
+    if (!slug || !Number.isFinite(localId) || !board || !toColumnKey)
+        return;
+    const boardCols = getBoardColumns(board);
+    const fromColumnKey = card.closest("[data-column]")?.dataset.column || "";
+    if (fromColumnKey === toColumnKey)
+        return;
+    const fromTitle = boardCols.find((column) => column.key === fromColumnKey)?.title || fromColumnKey;
+    const toTitle = boardCols.find((column) => column.key === toColumnKey)?.title || toColumnKey;
+    const interactive = Array.from(card.querySelectorAll("button, select"));
+    interactive.forEach((element) => { element.disabled = true; });
+    control.classList.add("is-moving");
+    try {
+        recordLocalMutation();
+        await apiFetch(`/api/board/${slug}/todos/${localId}/move`, {
+            method: "POST",
+            body: JSON.stringify({ toColumnKey, afterId: null, beforeId: null }),
+        });
+        showToast(t("board.workflow.moved", { from: fromTitle, to: toTitle }));
+        await loadBoardBySlug(slug, getTag(), getSearch(), getSprintIdFromUrl(), getAssigneeFromUrl(), getSortFromUrl(), getPriorityFromUrl());
+    }
+    catch (err) {
+        showToast(apiErrorMessage(err, { fallbackKey: "board.todo.moveFailed" }));
+        interactive.forEach((element) => { element.disabled = false; });
+        control.classList.remove("is-moving");
+    }
+}
 function attachBoardDelegationHandlers() {
     const boardEl = document.querySelector(".board");
     if (!boardEl)
@@ -335,9 +365,18 @@ function attachBoardDelegationHandlers() {
         return;
     boardEl[BOUND_FLAG] = true;
     boardEl.addEventListener("click", (e) => {
-        const card = e.target.closest("[data-todo-id]");
+        const target = e.target;
+        const card = target.closest("[data-todo-id]");
+        const flowButton = target.closest("[data-flow-to]");
+        if (card && flowButton) {
+            e.preventDefault();
+            e.stopPropagation();
+            const toColumnKey = flowButton.dataset.flowTo || "";
+            void moveTodoFromBoardControl(card, toColumnKey, flowButton);
+            return;
+        }
         if (card) {
-            if (e.target.closest(".card__drag-handle"))
+            if (target.closest("[data-flow-control], .card__drag-handle"))
                 return;
             if (dragInProgress || dragJustEnded)
                 return;
@@ -369,6 +408,34 @@ function attachBoardDelegationHandlers() {
                 handleLoadMore(status);
             return;
         }
+    });
+    boardEl.addEventListener("change", (e) => {
+        const select = e.target.closest("[data-flow-select]");
+        if (!select || !select.value)
+            return;
+        const card = select.closest("[data-todo-id]");
+        if (!card)
+            return;
+        const toColumnKey = select.value;
+        select.value = "";
+        void moveTodoFromBoardControl(card, toColumnKey, select);
+    });
+    boardEl.addEventListener("keydown", (e) => {
+        const keyEvent = e;
+        if (keyEvent.key !== "Enter" && keyEvent.key !== " ")
+            return;
+        const target = e.target;
+        if (target.closest("button, select, .card__drag-handle"))
+            return;
+        const card = target.closest("[data-todo-id]");
+        if (!card)
+            return;
+        const id = Number(card.getAttribute("data-todo-id"));
+        const todo = findTodoInBoard(id);
+        if (!todo)
+            return;
+        e.preventDefault();
+        openTodoFromCard(todo);
     });
     boardEl.addEventListener("contextmenu", (e) => {
         const colList = e.target.closest(".col__list");
@@ -474,6 +541,9 @@ async function handleLoadMore(status) {
                 showPointsMode,
                 selectedIds: getSelectedTodoIds(),
                 priorityTiers: board ? buildPriorityTierMap(board) : undefined,
+                canEditStatus: !!board && (currentUserProjectRole === "maintainer" || isTemporaryBoard(board)),
+                workflowColumns: board ? getBoardColumns(board) : [],
+                columnKey: status,
             };
             items.forEach((t) => {
                 const card = document.createElement("div");
@@ -798,6 +868,11 @@ function updateBoardContent(board, tag, search, sprintId, assignee, sort, priori
     // Precompute for card render loop
     const showPointsMode = isModifiedFibonacciModeEnabled();
     const membersByUserId = getMembersByUserId();
+    // Keep the visible product workflow in sync with customized lanes.
+    const workflowGuide = document.getElementById("workflowGuide");
+    if (workflowGuide) {
+        workflowGuide.outerHTML = buildWorkflowGuideHtml(getBoardColumns(board));
+    }
     // Update board columns
     const boardEl = document.querySelector(".board");
     if (boardEl) {
@@ -813,6 +888,7 @@ function updateBoardContent(board, tag, search, sprintId, assignee, sort, priori
             showPointsMode,
             selectedIds: getSelectedTodoIds(),
             priorityTiers: buildPriorityTierMap(board),
+            canEditStatus: currentUserProjectRole === "maintainer" || isTemporaryBoard(board),
         };
         const savedAgendaScroll = captureAgendaListScroll();
         boardEl.innerHTML =
@@ -939,6 +1015,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, assignee, 
         showPointsMode,
         selectedIds: getSelectedTodoIds(),
         priorityTiers: buildPriorityTierMap(board),
+        canEditStatus: currentUserProjectRole === "maintainer" || isTemporaryBoard(board),
     };
     app.innerHTML = `
     <div class="page">
@@ -946,6 +1023,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, assignee, 
 
       <div class="container">
         ${buildFiltersHtml(chipsHTML)}
+        ${buildWorkflowGuideHtml(boardCols)}
 
         <div class="mobile-board-wrapper">
           <div class="mobile-tabs" id="mobileTabs">

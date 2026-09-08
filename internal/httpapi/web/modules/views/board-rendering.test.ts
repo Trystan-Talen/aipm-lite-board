@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Board } from '../types.js';
-import { buildBoardColumnsHtml, buildTopbarHtml, getBoardColumns, renderTodoCard } from './board-rendering.js';
+import { buildBoardColumnsHtml, buildTopbarHtml, buildWorkflowGuideHtml, getBoardColumns, renderTodoCard } from './board-rendering.js';
 import {
   buildBoardColumnsHtml as buildBoardColumnsHtmlDist,
   buildTopbarHtml as buildTopbarHtmlDist,
@@ -177,6 +177,37 @@ describe('board topbar rendering', () => {
     expect(html).toContain('card__priority');
     expect(html).toContain('Urgent');
     expect(html).toContain('#EF4444');
+  });
+
+  it('renders an explicit requirement workflow and actionable card transitions', async () => {
+    const i18n = await import('../i18n/index.js');
+    await i18n.initI18n({ locale: 'en', loadLocale: vi.fn(async () => enCatalog) });
+    const workflow = [
+      { key: 'backlog', title: 'Requirement Pool', isDone: false, description: 'Waiting for evaluation' },
+      { key: 'doing', title: 'In Development', isDone: false, description: 'Implementation started' },
+      { key: 'done', title: 'Completed', isDone: true, description: 'Accepted' },
+    ];
+
+    const guide = buildWorkflowGuideHtml(workflow);
+    const card = renderTodoCard({
+      id: 3,
+      localId: 8,
+      title: 'Add export',
+      status: 'BACKLOG',
+      tags: [],
+    }, undefined, undefined, {
+      canEditStatus: true,
+      workflowColumns: workflow,
+      columnKey: 'backlog',
+    });
+
+    expect(guide).toContain('Requirement delivery workflow');
+    expect(guide).toContain('Requirement Pool');
+    expect(guide).toContain('→');
+    expect(card).toContain('data-flow-to="doing"');
+    expect(card).toContain('Advance: In Development');
+    expect(card).toContain('data-flow-select');
+    expect(card).toContain('<option value="done">Completed</option>');
   });
 
   it('omits the priority badge when the todo has no priority set', async () => {

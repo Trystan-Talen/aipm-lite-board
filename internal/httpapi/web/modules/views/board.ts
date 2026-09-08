@@ -58,6 +58,7 @@ import {
 } from '../realtime/guard.js';
 import {
   buildBoardColumnsHtml,
+  buildWorkflowGuideHtml,
   buildFiltersHtml,
   buildNoResultsHtml,
   buildTopbarHtml,
@@ -432,6 +433,36 @@ function scheduleCardHighlight(todo: Todo): void {
   });
 }
 
+async function moveTodoFromBoardControl(card: Element, toColumnKey: string, control: HTMLElement): Promise<void> {
+  const slug = getSlug();
+  const localId = Number(card.getAttribute("data-todo-local-id"));
+  const board = getBoard();
+  if (!slug || !Number.isFinite(localId) || !board || !toColumnKey) return;
+
+  const boardCols = getBoardColumns(board);
+  const fromColumnKey = card.closest<HTMLElement>("[data-column]")?.dataset.column || "";
+  if (fromColumnKey === toColumnKey) return;
+  const fromTitle = boardCols.find((column) => column.key === fromColumnKey)?.title || fromColumnKey;
+  const toTitle = boardCols.find((column) => column.key === toColumnKey)?.title || toColumnKey;
+  const interactive = Array.from(card.querySelectorAll<HTMLButtonElement | HTMLSelectElement>("button, select"));
+  interactive.forEach((element) => { element.disabled = true; });
+  control.classList.add("is-moving");
+
+  try {
+    recordLocalMutation();
+    await apiFetch(`/api/board/${slug}/todos/${localId}/move`, {
+      method: "POST",
+      body: JSON.stringify({ toColumnKey, afterId: null, beforeId: null }),
+    });
+    showToast(t("board.workflow.moved", { from: fromTitle, to: toTitle }));
+    await loadBoardBySlug(slug, getTag(), getSearch(), getSprintIdFromUrl(), getAssigneeFromUrl(), getSortFromUrl(), getPriorityFromUrl());
+  } catch (err: any) {
+    showToast(apiErrorMessage(err, { fallbackKey: "board.todo.moveFailed" }));
+    interactive.forEach((element) => { element.disabled = false; });
+    control.classList.remove("is-moving");
+  }
+}
+
 function attachBoardDelegationHandlers(): void {
   const boardEl = document.querySelector(".board");
   if (!boardEl) return;
@@ -440,9 +471,18 @@ function attachBoardDelegationHandlers(): void {
   (boardEl as any)[BOUND_FLAG] = true;
 
   boardEl.addEventListener("click", (e: Event) => {
-    const card = (e.target as HTMLElement).closest("[data-todo-id]");
+    const target = e.target as HTMLElement;
+    const card = target.closest("[data-todo-id]");
+    const flowButton = target.closest<HTMLButtonElement>("[data-flow-to]");
+    if (card && flowButton) {
+      e.preventDefault();
+      e.stopPropagation();
+      const toColumnKey = flowButton.dataset.flowTo || "";
+      void moveTodoFromBoardControl(card, toColumnKey, flowButton);
+      return;
+    }
     if (card) {
-      if ((e.target as HTMLElement).closest(".card__drag-handle")) return;
+      if (target.closest("[data-flow-control], .card__drag-handle")) return;
       if (dragInProgress || dragJustEnded) return;
       const me = e as MouseEvent;
       const id = Number(card.getAttribute("data-todo-id"));
@@ -470,6 +510,30 @@ function attachBoardDelegationHandlers(): void {
       if (status) handleLoadMore(status);
       return;
     }
+  });
+
+  boardEl.addEventListener("change", (e: Event) => {
+    const select = (e.target as HTMLElement).closest<HTMLSelectElement>("[data-flow-select]");
+    if (!select || !select.value) return;
+    const card = select.closest("[data-todo-id]");
+    if (!card) return;
+    const toColumnKey = select.value;
+    select.value = "";
+    void moveTodoFromBoardControl(card, toColumnKey, select);
+  });
+
+  boardEl.addEventListener("keydown", (e: Event) => {
+    const keyEvent = e as KeyboardEvent;
+    if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button, select, .card__drag-handle")) return;
+    const card = target.closest("[data-todo-id]");
+    if (!card) return;
+    const id = Number(card.getAttribute("data-todo-id"));
+    const todo = findTodoInBoard(id);
+    if (!todo) return;
+    e.preventDefault();
+    openTodoFromCard(todo);
   });
 
   boardEl.addEventListener("contextmenu", (e: Event) => {
@@ -569,6 +633,9 @@ async function handleLoadMore(status: TodoStatus): Promise<void> {
         showPointsMode,
         selectedIds: getSelectedTodoIds(),
         priorityTiers: board ? buildPriorityTierMap(board) : undefined,
+        canEditStatus: !!board && (currentUserProjectRole === "maintainer" || isTemporaryBoard(board)),
+        workflowColumns: board ? getBoardColumns(board) : [],
+        columnKey: status,
       };
       items.forEach((t) => {
         const card = document.createElement("div");
@@ -899,6 +966,12 @@ function updateBoardContent(board: Board, tag: string, search: string, sprintId:
   const showPointsMode = isModifiedFibonacciModeEnabled();
   const membersByUserId = getMembersByUserId();
 
+  // Keep the visible product workflow in sync with customized lanes.
+  const workflowGuide = document.getElementById("workflowGuide");
+  if (workflowGuide) {
+    workflowGuide.outerHTML = buildWorkflowGuideHtml(getBoardColumns(board));
+  }
+
   // Update board columns
   const boardEl = document.querySelector(".board");
   if (boardEl) {
@@ -915,6 +988,7 @@ function updateBoardContent(board: Board, tag: string, search: string, sprintId:
       showPointsMode,
       selectedIds: getSelectedTodoIds(),
       priorityTiers: buildPriorityTierMap(board),
+      canEditStatus: currentUserProjectRole === "maintainer" || isTemporaryBoard(board),
     };
     const savedAgendaScroll = captureAgendaListScroll();
     boardEl.innerHTML =
@@ -1056,6 +1130,7 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
     showPointsMode,
     selectedIds: getSelectedTodoIds(),
     priorityTiers: buildPriorityTierMap(board),
+    canEditStatus: currentUserProjectRole === "maintainer" || isTemporaryBoard(board),
   };
 
   app.innerHTML = `
@@ -1064,6 +1139,7 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
 
       <div class="container">
         ${buildFiltersHtml(chipsHTML)}
+        ${buildWorkflowGuideHtml(boardCols)}
 
         <div class="mobile-board-wrapper">
           <div class="mobile-tabs" id="mobileTabs">

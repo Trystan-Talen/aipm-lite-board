@@ -15,12 +15,47 @@ export function renderVoiceCommandTriggerHtml() {
     const title = hasI18nKey("voice.title") ? t("voice.title") : "VoiceFlow";
     return `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="${escapeHTML(title)}" title="${escapeHTML(title)}"><img src="/mic.svg" class="voice-command-trigger__icon" alt="" aria-hidden="true" decoding="async" width="20" height="20" /></button>`;
 }
+function workflowText(key, fallback, values = {}) {
+    const message = hasI18nKey(key) ? t(key, values) : fallback;
+    return message.replace(/\{([a-zA-Z0-9_.-]+)\}/g, (match, name) => values[name] ?? match);
+}
+function workflowDescription(key) {
+    const known = {
+        backlog: "board.workflow.stage.backlog",
+        not_started: "board.workflow.stage.notStarted",
+        doing: "board.workflow.stage.doing",
+        in_progress: "board.workflow.stage.doing",
+        testing: "board.workflow.stage.testing",
+        done: "board.workflow.stage.done",
+    };
+    const i18nKey = known[key.toLowerCase()];
+    return i18nKey && hasI18nKey(i18nKey) ? t(i18nKey) : workflowText("board.workflow.stage.default", "Workflow stage");
+}
+export function buildWorkflowGuideHtml(boardCols) {
+    const steps = boardCols.map((c, index) => `
+    <div class="workflow-guide__step${index === 0 ? " workflow-guide__step--first" : ""}${c.isDone ? " workflow-guide__step--done" : ""}">
+      <span class="workflow-guide__number">${index + 1}</span>
+      <span class="workflow-guide__copy">
+        <strong>${escapeHTML(c.title)}</strong>
+        <small>${escapeHTML(c.description || workflowDescription(c.key))}</small>
+      </span>
+      ${index < boardCols.length - 1 ? '<span class="workflow-guide__arrow" aria-hidden="true">→</span>' : ""}
+    </div>`).join("");
+    return `<section class="workflow-guide" id="workflowGuide" aria-label="${escapeHTML(workflowText("board.workflow.title", "Requirement delivery workflow"))}">
+    <div class="workflow-guide__intro">
+      <span class="workflow-guide__kicker">${escapeHTML(workflowText("board.workflow.kicker", "PRODUCT FLOW"))}</span>
+      <strong>${escapeHTML(workflowText("board.workflow.title", "Requirement delivery workflow"))}</strong>
+      <span>${escapeHTML(workflowText("board.workflow.hint", "Move cards with the advance button, the stage menu, or drag and drop."))}</span>
+    </div>
+    <div class="workflow-guide__steps">${steps}</div>
+  </section>`;
+}
 export function getBoardColumns(board) {
     const order = board.columnOrder;
     if (order && order.length > 0) {
-        return order.map((c) => ({ key: c.key, title: c.name, color: c.color, isDone: !!c.isDone }));
+        return order.map((c) => ({ key: c.key, title: c.name, color: c.color, isDone: !!c.isDone, description: workflowDescription(c.key) }));
     }
-    return columnsSpec().map((c) => ({ key: c.key, title: c.title, isDone: c.key === "done", color: undefined }));
+    return columnsSpec().map((c) => ({ key: c.key, title: c.title, isDone: c.key === "done", color: undefined, description: workflowDescription(c.key) }));
 }
 export function visibleBoardLaneCount(board) {
     return getBoardColumns(board).length + (board.agenda?.enabled ? 1 : 0);
@@ -142,6 +177,22 @@ export function renderTodoCard(todo, columnColor, membersByUserId, opts) {
         : "";
     const footerContent = priorityHTML + pointsHTML + avatarHTML;
     const selectedClass = opts?.selectedIds?.has(todo.id) ? " card--selected" : "";
+    const workflowColumns = opts?.workflowColumns ?? [];
+    const currentColumnKey = opts?.columnKey || todo.columnKey || todo.status?.toLowerCase() || "";
+    const currentColumnIndex = workflowColumns.findIndex((column) => column.key === currentColumnKey);
+    const currentColumn = currentColumnIndex >= 0 ? workflowColumns[currentColumnIndex] : null;
+    const nextColumn = currentColumnIndex >= 0 ? workflowColumns[currentColumnIndex + 1] : null;
+    const flowControlsHTML = opts?.canEditStatus && workflowColumns.length > 0 ? `
+        <div class="card__flow-control" data-flow-control>
+          <span class="card__stage" title="${escapeHTML(workflowText("board.workflow.current", "Current stage: {lane}", { lane: currentColumn?.title || "" }))}">${escapeHTML(currentColumn?.title || workflowText("board.workflow.currentStage", "Current stage"))}</span>
+          ${nextColumn
+        ? `<button class="card__flow-action" type="button" data-flow-to="${escapeHTML(nextColumn.key)}" aria-label="${escapeHTML(workflowText("board.workflow.next", "Advance to {lane}", { lane: nextColumn.title }))}">→ ${escapeHTML(workflowText("board.workflow.nextShort", "Advance: {lane}", { lane: nextColumn.title }))}</button>`
+        : `<span class="card__flow-complete">✓ ${escapeHTML(workflowText("board.workflow.completed", "Completed"))}</span>`}
+          <select class="card__flow-select" data-flow-select aria-label="${escapeHTML(workflowText("board.workflow.moveTo", "Move to…"))}">
+            <option value="">${escapeHTML(workflowText("board.workflow.moveTo", "Move to…"))}</option>
+            ${workflowColumns.filter((column) => column.key !== currentColumnKey).map((column) => `<option value="${escapeHTML(column.key)}">${escapeHTML(column.title)}</option>`).join("")}
+          </select>
+        </div>` : "";
     const dragHandleHTML = `
       <div class="card__drag-handle" aria-label="${escapeHTML(t("board.todo.dragCard"))}" data-i18n-aria-label="board.todo.dragCard">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -155,7 +206,7 @@ export function renderTodoCard(todo, columnColor, membersByUserId, opts) {
       </div>
     `;
     return `
-    <button class="card card--${todo.status.toLowerCase()}${selectedClass}"${borderStyle} data-todo-id="${todo.id}" data-todo-local-id="${todo.localId}"${todo.assigneeUserId != null ? ` data-assignee-user-id="${todo.assigneeUserId}"` : ""} id="todo_${todo.id}" type="button">
+    <article class="card card--${todo.status.toLowerCase()}${selectedClass}"${borderStyle} data-todo-id="${todo.id}" data-todo-local-id="${todo.localId}"${todo.assigneeUserId != null ? ` data-assignee-user-id="${todo.assigneeUserId}"` : ""} id="todo_${todo.id}" tabindex="0" role="button">
       <div class="card__content">
         <div class="card__title-row">
           <span class="card__id-inline">#${todo.localId}</span>
@@ -171,9 +222,10 @@ export function renderTodoCard(todo, columnColor, membersByUserId, opts) {
     </span>
   </div>
 ` : ""}
+        ${flowControlsHTML}
       </div>
       ${dragHandleHTML}
-    </button>
+    </article>
   `;
 }
 export function buildBoardColumnsHtml(args) {
@@ -190,11 +242,11 @@ export function buildBoardColumnsHtml(args) {
         return `
           <section class="col ${isMobileActive ? "col--mobile-active" : ""}${laneTint.extraClass}" data-column="${dk}"${laneTint.styleAttr}>
             <div class="col__head col__head--${c.key.toLowerCase()}" ${c.color ? `style="background:${escapeHTML(c.color)};"` : ""}>
-              <span class="col__title">${escapeHTML(c.title)}</span>
+              <span class="col__heading"><span class="col__title">${escapeHTML(c.title)}</span><span class="col__hint">${escapeHTML(c.description || workflowDescription(c.key))}</span></span>
               <span class="col__count" data-count-for="${dk}">${laneDisplayCount(c.key)}</span>
             </div>
             <div class="col__list" data-status="${dk}" id="list_${c.key}">
-              ${todos.map((t) => renderTodoCard(t, c.color, membersByUserId, cardOpts)).join("")}
+              ${todos.map((t) => renderTodoCard(t, c.color, membersByUserId, { ...cardOpts, workflowColumns: boardCols, columnKey: c.key })).join("")}
             </div>
             ${showLoadMore ? `<div class="col__load-more" data-load-more="${dk}"><button class="btn btn--ghost btn--small col__load-more--desktop" type="button" data-i18n-text="board.loadMore">${loadMoreLabel}</button><span class="col__load-more--mobile" role="button" tabindex="0" aria-label="${loadMoreLabel}" data-i18n-aria-label="board.loadMore">▼</span></div>` : ""}
           </section>
