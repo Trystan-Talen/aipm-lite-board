@@ -29,6 +29,7 @@ import { attachBoardInteractionListeners, clearPendingRealtimeRefresh, connectBo
 import { canShowVoiceCommands } from './board-command-capabilities.js';
 import { getVoiceFlowEnabledPreference } from '../core/voiceflow-preferences.js';
 import { applyWrapLanesClass } from '../core/wrap-lanes-preferences.js';
+import { buildProjectWorkbench, bindProjectWorkbench, getWorkspaceView, setWorkspaceView, preloadWorkbenchSprints, getCachedSprints, hasCachedSprints, buildWorkbenchContent, } from './project-workbench.js';
 // Symbol for idempotent listener attachment
 const BOUND_FLAG = Symbol('bound');
 const HIGHLIGHT_CLASS = "card--highlight";
@@ -927,6 +928,62 @@ function updateBoardContent(board, tag, search, sprintId, assignee, sort, priori
     lastUpdateBoardContentSort = sort;
     lastUpdateBoardContentPriority = priority;
 }
+function buildLegacyBoardMarkup(board, boardCols, membersByUserId, cardOpts) {
+    return `
+    ${buildFiltersHtml(computeBoardChipsRender(board, getTag() || "", getSprintIdFromUrl() ?? null).chipsHTML)}
+    ${buildWorkflowGuideHtml(boardCols)}
+    <div class="mobile-board-wrapper">
+      <div class="mobile-tabs" id="mobileTabs">
+        ${buildMobileTabsInnerHtml(boardCols, {
+        activeTabKey: getMobileTab(),
+        extraTabs: agendaMobileTab(board) ? [agendaMobileTab(board)] : [],
+        laneLabel: (key) => {
+            if (key === AGENDA_COLUMN_KEY)
+                return agendaMobileTabAriaLabel(board);
+            const col = boardCols.find((c) => c.key === key);
+            const title = col?.title ?? "";
+            return `${title} ${getLaneDisplayCount(key)}`;
+        },
+    })}
+      </div>
+      <div class="board">
+        ${buildAgendaColumnHtml(board, getMobileTab())}
+        ${buildBoardColumnsHtml({
+        boardCols,
+        board,
+        activeMobileTab: getMobileTab(),
+        laneMetaByKey: getBoardLaneMeta(),
+        laneDisplayCount: (key) => getLaneDisplayCount(key),
+        membersByUserId,
+        cardOpts,
+    })}
+      </div>
+    </div>`;
+}
+function renderAipmWorkbench(board, projectId, boardCols, topbarHTML, cardOpts, view) {
+    const slug = getSlug() || board.project.slug || '';
+    const members = getBoardMembers();
+    const legacyBoardHtml = `${topbarHTML}<div class="container">${buildLegacyBoardMarkup(board, boardCols, getMembersByUserId(), cardOpts)}</div>`;
+    const rerender = (nextView) => {
+        setWorkspaceView(nextView, slug);
+        renderBoardFromData(board, projectId, getTag(), getSearch(), getSprintIdFromUrl(), getAssigneeFromUrl(), getSortFromUrl(), getPriorityFromUrl(), { ...lastBoardRenderOptions, forceFullRender: true });
+    };
+    const workbenchOptions = { board, projectId, slug, view, members, role: currentUserProjectRole, legacyBoardHtml, sprints: getCachedSprints(slug), onViewChange: rerender };
+    app.innerHTML = buildProjectWorkbench(workbenchOptions);
+    bindProjectWorkbench(workbenchOptions);
+    if (!hasCachedSprints(slug)) {
+        void preloadWorkbenchSprints(slug).then((sprints) => {
+            if (getSlug() !== slug || getWorkspaceView(slug) !== view || view === 'board')
+                return;
+            const root = document.querySelector('[data-aipm-workspace]');
+            const content = root?.querySelector('#workspaceContent');
+            if (!root || !content)
+                return;
+            content.innerHTML = buildWorkbenchContent(board, view, members, sprints, legacyBoardHtml);
+            bindProjectWorkbench(workbenchOptions);
+        });
+    }
+}
 function renderBoardFromData(board, projectId, tag, search, sprintId, assignee, sort, priority = null, opts = {}) {
     lastBoardRenderProjectId = projectId;
     lastBoardRenderOptions = {
@@ -1017,46 +1074,18 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, assignee, 
         priorityTiers: buildPriorityTierMap(board),
         canEditStatus: currentUserProjectRole === "maintainer" || isTemporaryBoard(board),
     };
-    app.innerHTML = `
-    <div class="page">
-      ${topbarHTML}
-
-      <div class="container">
-        ${buildFiltersHtml(chipsHTML)}
-        ${buildWorkflowGuideHtml(boardCols)}
-
-        <div class="mobile-board-wrapper">
-          <div class="mobile-tabs" id="mobileTabs">
-            ${buildMobileTabsInnerHtml(boardCols, {
-        activeTabKey: getMobileTab(),
-        extraTabs: agendaMobileTab(board) ? [agendaMobileTab(board)] : [],
-        laneLabel: (key) => {
-            if (key === AGENDA_COLUMN_KEY) {
-                return agendaMobileTabAriaLabel(board);
-            }
-            const col = boardCols.find((c) => c.key === key);
-            const title = col?.title ?? "";
-            return `${title} ${getLaneDisplayCount(key)}`;
-        },
-    })}
-          </div>
-
-          <div class="board">
-          ${buildAgendaColumnHtml(board, getMobileTab())}
-          ${buildBoardColumnsHtml({
-        boardCols,
-        board,
-        activeMobileTab: getMobileTab(),
-        laneMetaByKey: getBoardLaneMeta(),
-        laneDisplayCount: (key) => getLaneDisplayCount(key),
-        membersByUserId,
-        cardOpts,
-    })}
-          </div>
-        </div>
+    const workspaceView = isTemporaryBoard(board) || isAnonymousTempBoard ? "board" : getWorkspaceView(getSlug());
+    if (!isTemporaryBoard(board) && !isAnonymousTempBoard) {
+        renderAipmWorkbench(board, projectId, boardCols, topbarHTML, cardOpts, workspaceView);
+    }
+    else {
+        app.innerHTML = `
+      <div class="page">
+        ${topbarHTML}
+        <div class="container">${buildLegacyBoardMarkup(board, boardCols, membersByUserId, cardOpts)}</div>
       </div>
-    </div>
-  `;
+    `;
+    }
     const boardRoot = document.querySelector(".board");
     if (boardRoot)
         applyWrapLanesClass(boardRoot, visibleBoardLaneCount(board));
